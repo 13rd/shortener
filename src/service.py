@@ -6,27 +6,28 @@ from sqlalchemy.ext.asyncio import AsyncSession
 import re
 
 
+URL_PATTERN = re.compile(
+    r'^(https?|ftp)://'
+    r'(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+'
+    r'[a-zA-Z]{2,}'
+    r'(?::\d{1,5})?'
+    r'(?:/[^\s]*)?$',
+    re.IGNORECASE
+)
+
 
 async def validate_url(url: str) -> bool:
-    """ Checks if the given url exists in the database """
-    url_pattern = re.compile(
-        r'^'  # Начало строки
-        r'(?:http|ftp)s?://'  # http://, https://, ftp://, ftps://
-        r'(?:'  # Начало группы для домена
-        r'(?:[A-Z0-9](?:[A-Z0-9-]{0,61}[A-Z0-9])?\.)+'  # Поддомены
-        r'(?:[A-Z]{2,6}\.?|[A-Z0-9-]{2,}\.?)|'  # Домен верхнего уровня
-        r'localhost|'  # localhost
-        r'\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}|'  # IPv4
-        r'\[?[A-F0-9]*:[A-F0-9:]+\]?'  # IPv6
-        r')'
-        r'(?::\d+)?'  # Необязательный порт
-        r'(?:/?|[/?]\S+)'  # Путь и параметры
-        r'$',  # Конец строки
-        re.IGNORECASE
-    )
-    if bool(url_pattern.match(url)):
-        return True
-    raise InvalidUrlException()
+    """ Checks if the given url exists in the database
+        :raises InvalidUrlException:
+        :return: bool
+    """
+    if not url or not isinstance(url, str):
+        raise InvalidUrlException()
+
+    if not URL_PATTERN.match(url.strip()):
+        raise InvalidUrlException()
+
+    return True
 
 
 
