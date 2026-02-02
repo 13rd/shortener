@@ -10,3 +10,6 @@ class NonexistentUrlException(ShortenerException):
 
 class SlugAlreadyExistsException(ShortenerException):
     pass
+
+class InvalidUrlException(ShortenerException):
+    pass

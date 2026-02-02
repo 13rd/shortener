@@ -2,9 +2,8 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from starlette import status
-
 from src.core.config import settings
-from src.exceptions import NonexistentUrlException, SlugAlreadyExistsException
+from src.exceptions import NonexistentUrlException, SlugAlreadyExistsException, InvalidUrlException
 from src.database.db import engine, new_session
 from src.database.models import Base
 from fastapi import FastAPI, Body, HTTPException, Depends
@@ -44,6 +43,8 @@ async def short_url(
     try:
         new_slug = await generate_short_url(long_url, session=session)
         return {"slug": new_slug}
+    except InvalidUrlException:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid URL.")
     except SlugAlreadyExistsException:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                             detail="Slug not generated",
