@@ -12,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
-from src.service import generate_short_url, get_url_by_slug, generate_random_slug_with_ttl
+from src.service import generate_short_url, get_url_by_slug
 from src.redis_client import redis_client, RedisClient
 
 
@@ -57,10 +57,12 @@ async def short_url(
 async def url_ttl(
         session: Annotated[AsyncSession, Depends(get_session)],
         long_url: Annotated[str, Body(embed=True)],
+        ttl_days: Annotated[int, Body(embed=True)],
         ttl_hours: Annotated[int, Body(embed=True)],
+        ttl_minutes: Annotated[int, Body(embed=True)],
 ):
     try:
-        new_slug = await generate_short_url(long_url, ttl=timedelta(hours=ttl_hours), session=session)
+        new_slug = await generate_short_url(long_url, ttl=timedelta(days=ttl_days, hours=ttl_hours, minutes=ttl_minutes), session=session)
         return {"slug": new_slug}
     except InvalidUrlException:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid URL.")
