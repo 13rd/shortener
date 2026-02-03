@@ -1,4 +1,8 @@
+from datetime import datetime, UTC, timedelta
+from typing import Optional
+
 from src.database.crud import add_slug_to_database, get_url_from_database
+from src.database.models import ShortUrl
 from src.exceptions import NonexistentUrlException, InvalidUrlException
 from src.shortener import generate_random_slug
 from src.exceptions import SlugAlreadyExistsException
@@ -31,7 +35,9 @@ async def validate_url(url: str) -> bool:
 
 
 
-async def generate_short_url(long_url: str, session: AsyncSession) -> str:
+async def generate_short_url(long_url: str,
+                             session: AsyncSession,
+                             ttl: Optional[timedelta] = None,) -> str:
     """
     Generate a short slug, add in database and return it. Retry in 5 times if the slug already exists.
     #TODO: ПЕРЕДЕЛАТЬ
@@ -44,7 +50,7 @@ async def generate_short_url(long_url: str, session: AsyncSession) -> str:
 
     async def _generate_slug_and_add_to_database() -> str:
         generated_slug = generate_random_slug()
-        await add_slug_to_database(generated_slug, long_url, session=session)
+        await add_slug_to_database(slug=generated_slug, long_url=long_url, session=session, ttl=ttl)
         return generated_slug
 
     for attempt in range(5):
@@ -57,10 +63,29 @@ async def generate_short_url(long_url: str, session: AsyncSession) -> str:
 
 
 
-
-
 async def get_url_by_slug(slug: str, session: AsyncSession) -> str:
     url = await get_url_from_database(slug, session=session)
     if not url:
         raise NonexistentUrlException()
     return url
+
+
+async def cleanup_expired_urls(session: AsyncSession) -> int:
+    """
+    Удаляет все просроченные короткие ссылки.
+
+    Returns:
+        Количество удалённых записей
+    """
+    from sqlalchemy import delete, func
+
+    stmt = delete(ShortUrl).where(
+        ShortUrl.expires_at.isnot(None),
+        ShortUrl.expires_at < func.now()
+    )
+
+    result = await session.execute(stmt)
+    await session.commit()
+
+    return result.rowcount
+

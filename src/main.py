@@ -1,9 +1,10 @@
+from datetime import timedelta
 from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession
 from typing import Annotated
 from starlette import status
 from src.core.config import settings
-from src.exceptions import NonexistentUrlException, SlugAlreadyExistsException, InvalidUrlException
+from src.exceptions import NonexistentUrlException, SlugAlreadyExistsException, InvalidUrlException, ExpiredUrlException
 from src.database.db import engine, new_session
 from src.database.models import Base
 from fastapi import FastAPI, Body, HTTPException, Depends
@@ -11,7 +12,7 @@ from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
-from src.service import generate_short_url, get_url_by_slug
+from src.service import generate_short_url, get_url_by_slug, generate_random_slug_with_ttl
 from src.redis_client import redis_client, RedisClient
 
 
@@ -38,10 +39,28 @@ app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:3000"], allo
 @app.post("/short_url")
 async def short_url(
         session: Annotated[AsyncSession, Depends(get_session)],
-        long_url: Annotated[str, Body(embed=True)]
+        long_url: Annotated[str, Body(embed=True)],
+
 ):
     try:
         new_slug = await generate_short_url(long_url, session=session)
+        return {"slug": new_slug}
+    except InvalidUrlException:
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid URL.")
+    except SlugAlreadyExistsException:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                            detail="Slug not generated",
+                            )
+
+
+@app.post("/short_url_ttl")
+async def url_ttl(
+        session: Annotated[AsyncSession, Depends(get_session)],
+        long_url: Annotated[str, Body(embed=True)],
+        ttl_hours: Annotated[int, Body(embed=True)],
+):
+    try:
+        new_slug = await generate_short_url(long_url, ttl=timedelta(hours=ttl_hours), session=session)
         return {"slug": new_slug}
     except InvalidUrlException:
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail="Invalid URL.")
@@ -55,12 +74,14 @@ async def short_url(
 async def redirect_to_url(slug: str,
                           redis: Annotated[RedisClient, Depends(get_redis_client)],
                           session: Annotated[AsyncSession, Depends(get_session)]):
-    try:
-        cached_url = await redis.get(slug)
-        if cached_url:
-            return RedirectResponse(url=cached_url, status_code=status.HTTP_302_FOUND)
+    try:  # deleted caching
+        # cached_url = await redis.get(slug)
+        # if cached_url:
+        #     return RedirectResponse(url=cached_url, status_code=status.HTTP_302_FOUND)
         url = await get_url_by_slug(slug, session=session)
-        await redis.set(slug, url, settings.cache.ttl_slug)
+        # await redis.set(slug, url, settings.cache.ttl_slug)
+    except ExpiredUrlException:
+        raise HTTPException(status_code=status.HTTP_410_GONE, detail="Expired URL.")
     except NonexistentUrlException:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not found.")
     return RedirectResponse(url=url, status_code=status.HTTP_302_FOUND)
