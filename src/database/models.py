@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta, UTC
-from sqlalchemy import Column, String, DateTime, Index
+from sqlalchemy import Column, String, DateTime, Index, func
 from sqlalchemy.orm import DeclarativeBase, mapped_column, Mapped
 
 class Base(DeclarativeBase):
@@ -12,9 +12,9 @@ class ShortUrl(Base):
     slug: Mapped[str] = mapped_column(primary_key=True)
     long_url: Mapped[str] = mapped_column(String(2048))
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.now(UTC)
+        DateTime(timezone=True), server_default=func.now()
     )
-    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=True)
 
     __table_args__ = (
         Index('idx_expires_at', 'expires_at'),
