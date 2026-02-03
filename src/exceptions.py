@@ -13,3 +13,6 @@ class SlugAlreadyExistsException(ShortenerException):
 
 class InvalidUrlException(ShortenerException):
     pass
+
+class ExpiredUrlException(ShortenerException):
+    pass
